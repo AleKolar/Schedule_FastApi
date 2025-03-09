@@ -3,18 +3,14 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
+
 class Drug(BaseModel):
-    """
-    Модель для лекарства и его параметров приема.
-    """
     drug: str = Field(..., description="Наименование лекарства")
     periodicity: int = Field(..., description="Периодичность приёмов в часах")
     duration_days: Optional[int] = Field(None, description="Продолжительность лечения в днях (Optional)")
 
+
 class User(BaseModel):
-    """
-    Модель для пользователя и его расписания приема лекарств.
-    """
     user_id: int = Field(..., description="Идентификатор пациента (user_id)")
     first_time: datetime = Field(..., description="Дата и время первого приема (YYYY-MM-DD HH:MM)")
     drugs: List[Drug] = Field(..., description="Список назначенных лекарств")
@@ -23,7 +19,6 @@ class User(BaseModel):
 
     @classmethod
     def round_minute(cls, value: datetime):
-        """Округляем минуты до ближайшего временного диапазона."""
         minute = value.minute
         if 1 <= minute <= 15:
             return value.replace(minute=15, second=0, microsecond=0)
@@ -36,48 +31,47 @@ class User(BaseModel):
 
     @model_validator(mode='after')
     def generate_scheduled_times(self):
-        """Генерируем расписание приемов для каждого лекарства."""
-        self.takings = []  # Инициализируем список takings
-        self.last_day_times = []  # Инициализируем список last_day_times
+        self.takings = []
+        self.last_day_times = []
 
         for drug in self.drugs:
-            first_time_rounded = self.round_minute(self.first_time)  # Округляем и берем как точку отсчета
+            first_time_rounded = self.round_minute(self.first_time)
             takings = []
 
-            # Определяем время окончания приема в последний день
-            end_time_last_day = first_time_rounded - timedelta(hours=drug.periodicity)
-
-            # Рассчитываем время приемов на каждый день лечения
+            # Генерируем расписание
             for day in range(drug.duration_days):
-                current_date = first_time_rounded.date() + timedelta(days=day)  # Получаем дату текущего дня
+                current_date = first_time_rounded.date() + timedelta(days=day)
 
-                # Начинаем от 8:00
-                schedule_time = datetime.combine(current_date, datetime.min.time()).replace(hour=8)
-
-                # Устанавливаем конечное время приема в текущий день
-                if day == drug.duration_days - 1:  # Если это последний день
-                    end_time_day = end_time_last_day.replace(year=current_date.year, month=current_date.month, day=current_date.day)
+                # Устанавливаем начальное время для текущего дня
+                if day == 0:
+                    schedule_time = first_time_rounded
                 else:
-                    end_time_day = datetime.combine(current_date, datetime.min.time()).replace(hour=22)
+                    schedule_time = datetime.combine(current_date, datetime.min.time()).replace(hour=8)  # Начинаем с 8:00
 
-                # Пока текущее время меньше конечного времени дня, добавляем время приема
+                # Конечное время приема на последний день
+                end_time_day = datetime.combine(current_date, datetime.min.time()).replace(hour=22)
+
+                # Добавляем приемы
                 while schedule_time < end_time_day:
-                    # Добавляем прием, если он начинается с округленного времени
-                    if schedule_time >= first_time_rounded and schedule_time.date() == current_date:
+                    if schedule_time.hour >= 8 and schedule_time < end_time_day:
                         takings.append(schedule_time)
+
+                    # Увеличиваем текущее время приема на периодичность
                     schedule_time += timedelta(hours=drug.periodicity)
 
-            self.takings.append(takings)  # Запоминаем расписание для текущего лекарства
+            self.takings.append(takings)
 
+            # Определяем время окончания лечения, вычитая периодичность
             if takings:
-                self.last_day_times.append(takings[-1])  # Последний прием для текущего лекарства
+                last_drug_time = first_time_rounded + timedelta(days=drug.duration_days)  # Время окончания лечения
+                last_drug_time -= timedelta(hours=drug.periodicity)  # Вычитаем периодичность
+                self.last_day_times.append(last_drug_time)
             else:
                 self.last_day_times.append(None)
 
         return self
 
     def get_next_taking(self, drug_index: int) -> Optional[datetime]:
-        """Вычисляет ближайшее время приема."""
         now = datetime.now()
         all_takings = self.takings[drug_index]
         next_taking = None
@@ -89,9 +83,10 @@ class User(BaseModel):
 
         return next_taking
 
+
 # Пример использования
-drug1 = Drug(drug="Аспирин", periodicity=1, duration_days=3)
-drug2 = Drug(drug="Парацетамол", periodicity=4, duration_days=5)
+drug1 = Drug(drug="Аспирин", periodicity=2, duration_days=3)  # Каждые 2 часа, 3 дня
+drug2 = Drug(drug="Парацетамол", periodicity=1, duration_days=5)  # Каждый час, 5 дней
 
 user = User(
     user_id=123,
