@@ -40,7 +40,8 @@ class User(BaseModel):
 
             # Генерируем расписание
             for day in range(drug.duration_days):
-                current_date = first_time_rounded.date() + timedelta(days=day)
+                current_date = first_time_rounded.date() + timedelta(days=day) # Тут я запутался и прибегнул
+                # к помощи "индийского программиста", но вся логика моя от и до(может и не совсем верная)
 
                 # Устанавливаем начальное время для текущего дня
                 if day == 0:
