@@ -79,7 +79,7 @@ def get_next_schedule(user_id: uuid.UUID, db: Session) -> List[dict]:
             if next_time:
                 next_schedule.append({
                     "schedule_id": schedule.id,
-                    "next_taking": next_time
+                    "next_time": next_time
                 })
 
     return next_schedule
