@@ -1,53 +1,83 @@
-from datetime import datetime, timedelta
-from typing import Tuple, List, Optional
+from __future__ import annotations
 
-from src.models import Drug
+from datetime import datetime, timedelta, timezone
+from typing import List, Tuple, Optional, Any
 
+from typing import TYPE_CHECKING
 
-class ScheduleGenerator:
+if TYPE_CHECKING:
+    from src.models import User
+
+class ScheduleGeneratorTimes:
+    TIME_FORMAT = '%Y-%m-%d %H:%M'
+    DAY_START_HOUR = 8
+    DAY_END_HOUR = 22
+
     @staticmethod
-    def round_minute(value: datetime) -> datetime:
-        minute = value.minute
+    def round_minute(value: str) -> Optional[datetime]:
+        """ Округляет минуты во времени до ближайших 15, 30, 45 или 00 """
+        try:
+            value_dt = datetime.strptime(value, ScheduleGeneratorTimes.TIME_FORMAT).replace(tzinfo=timezone.utc)
+        except ValueError:
+            print(f"Ошибка: Некорректный формат даты/времени: {value}")
+            return None
+
+        minute = value_dt.minute
         if 1 <= minute <= 15:
-            return value.replace(minute=15, second=0, microsecond=0)
+            rounded_time = value_dt.replace(minute=15, second=0, microsecond=0)
         elif 16 <= minute <= 30:
-            return value.replace(minute=30, second=0, microsecond=0)
+            rounded_time = value_dt.replace(minute=30, second=0, microsecond=0)
         elif 31 <= minute <= 45:
-            return value.replace(minute=45, second=0, microsecond=0)
+            rounded_time = value_dt.replace(minute=45, second=0, microsecond=0)
         else:
-            return value.replace(hour=(value.hour + 1) % 24, minute=0, second=0, microsecond=0)
+            rounded_time = value_dt.replace(hour=(value_dt.hour + 1) % 24, minute=0, second=0, microsecond=0)
+        return rounded_time
 
-    @staticmethod
-    def generate_scheduled_times(drugs: List[Drug], first_time: datetime) -> Tuple[List[List[datetime]], List[Optional[datetime]]]:
+    @classmethod
+    def generate_scheduled_times(cls, user) -> Tuple[List[List[str]], List[Optional[datetime]]]:
+        """ Генерирует расписание приема лекарств для пользователя """
         schedule = []
         last_day_times = []
+        first_time_rounded = cls.round_minute(user.first_time)
 
-        for drug in drugs:
-            first_time_rounded = ScheduleGenerator.round_minute(first_time)
-            drug_takings = []
+        if first_time_rounded is None:
+            return [], []
 
-            for day in range(drug.duration_days or 0):
-                current_date = first_time_rounded.date() + timedelta(days=day)
+            # Приводим к timezone-aware datetime
+        first_time_dt = first_time_rounded.replace(tzinfo=timezone.utc)
 
-                if day == 0:
-                    schedule_time = first_time_rounded
-                else:
-                    schedule_time = datetime.combine(current_date, datetime.min.time()).replace(hour=8)
+        for drug in user.drugs:
+            if drug.duration_days is None or drug.duration_days <= 0:
+                print(f"Ошибка: Некорректная продолжительность лечения")
+                duration = 22250
+            else:
+                duration = drug.duration_days
 
-                end_time_day = datetime.combine(current_date, datetime.min.time()).replace(hour=22)
+            if drug.periodicity <= 0:
+                print(f"Ошибка: Некорректная периодичность приема лекарства")
+                continue
+
+            drug_schedule = []
+
+            for day in range(duration):
+                current_date = first_time_dt.date() + timedelta(days=day)
+                schedule_time = datetime.combine(current_date, datetime.min.time()).replace(
+                    hour=ScheduleGeneratorTimes.DAY_START_HOUR, tzinfo=timezone.utc)
+                end_time_day = datetime.combine(current_date, datetime.min.time()).replace(
+                    hour=ScheduleGeneratorTimes.DAY_END_HOUR, tzinfo=timezone.utc)
 
                 while schedule_time < end_time_day:
-                    if schedule_time.hour >= 8:
-                        drug_takings.append(schedule_time)
+                    if ScheduleGeneratorTimes.DAY_START_HOUR <= schedule_time.hour < ScheduleGeneratorTimes.DAY_END_HOUR:
+                        drug_schedule.append(schedule_time.strftime(ScheduleGeneratorTimes.TIME_FORMAT))
                     schedule_time += timedelta(hours=drug.periodicity)
 
-            schedule.append(drug_takings)
+            schedule.append(drug_schedule)
 
-            if drug_takings:
-                last_drug_time = first_time_rounded + timedelta(days=drug.duration_days) - timedelta(hours=drug.periodicity)
-                last_day_times.append(last_drug_time)
+            if drug_schedule:
+                last_drug_time = datetime.strptime(drug_schedule[-1], ScheduleGeneratorTimes.TIME_FORMAT).replace(
+                    tzinfo=timezone.utc)
+                last_day_times.append(last_drug_time)  ## datetime
             else:
                 last_day_times.append(None)
 
         return schedule, last_day_times
-
