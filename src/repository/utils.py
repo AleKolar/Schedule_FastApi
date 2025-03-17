@@ -5,6 +5,8 @@ from typing import List, Tuple, Optional, Any, Dict, Union
 
 from typing import TYPE_CHECKING
 
+from pydantic.v1.schema import schema
+
 if TYPE_CHECKING:
     from src.models import SchemaScheduleCreate
 
@@ -33,12 +35,12 @@ class ScheduleGeneratorTimes:
         return rounded_time
 
     @classmethod
-    def generate_scheduled_times(cls, schema: SchemaScheduleCreate) -> Tuple[
+    def generate_scheduled_times(cls, schedule_schema: SchemaScheduleCreate) -> Tuple[
         List[List[Dict[str, Union[str, datetime]]]], List[Optional[datetime]]]:
 
         schedule = []
         last_day_times = []
-        first_time_rounded = cls.round_minute(schema.first_time)
+        first_time_rounded = cls.round_minute(schedule_schema.first_time)
 
         if first_time_rounded is None:
             return [], []
@@ -47,16 +49,15 @@ class ScheduleGeneratorTimes:
         first_time_dt = first_time_rounded.replace(tzinfo=timezone.utc)
 
         # Проходим по каждому лекарству в списке drugs
-        for drug in schema.drugs:
-            if drug.duration_days is None or drug.duration_days <= 0:
-                print(f"Ошибка: Некорректная продолжительность лечения для лекарства {drug.drug}")
-                duration = 22250  # Установите значение по умолчанию, если необходимо
-            else:
-                duration = drug.duration_days
+        #for drug in schema.drugs:
+        if schedule_schema.duration_days is None or schedule_schema.duration_days <= 0:
+            print(f"Ошибка: Некорректная продолжительность лечения для лекарства {schedule_schema.drug}")
+            schedule_schema.duration = 22250  # Установите значение по умолчанию, если необходимо
+        else:
+            duration = schedule_schema.duration_days
 
-            if drug.periodicity <= 0:
-                print(f"Ошибка: Некорректная периодичность приема лекарства {drug.drug}")
-                continue
+            if schedule_schema.periodicity <= 0:
+                print(f"Ошибка: Некорректная периодичность приема лекарства {schedule_schema.drug}")
 
             drug_schedule = []
 
@@ -71,8 +72,8 @@ class ScheduleGeneratorTimes:
                 while schedule_time < end_time_day:
                     if ScheduleGeneratorTimes.DAY_START_HOUR <= schedule_time.hour < ScheduleGeneratorTimes.DAY_END_HOUR:
                         # Добавляем словарь с временем и названием лекарства
-                        drug_schedule.append({"time": schedule_time, "drug_name": drug.drug})
-                    schedule_time += timedelta(hours=drug.periodicity)
+                        drug_schedule.append({"time": schedule_time, "drug_name": schedule_schema.drug})
+                    schedule_time += timedelta(hours=schedule_schema.periodicity)
 
             schedule.append(drug_schedule)
 

@@ -43,7 +43,10 @@ async def create_schedule(schedule_create: SchemaScheduleCreate, db: AsyncSessio
     await db.commit()
 
     return {"message": "Schedule created successfully", "schedule": schedule}
-        # @app.get("/schedules")
+
+
+
+# @app.get("/schedules")
 # def get_user_schedules(user_id: uuid.UUID, db: Session = Depends(get_db)):
 #     schedules = get_user_schedules(user_id, db)
 #     return {"schedules": schedules}
