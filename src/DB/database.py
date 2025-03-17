@@ -1,4 +1,3 @@
-from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine, AsyncSession
 from src.DB.ORM_models import Model
 from src.config.config import settings

@@ -1,9 +1,10 @@
 import uuid
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict
 
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, UUID, JSON
 from sqlalchemy.orm import relationship, DeclarativeBase, Mapped, mapped_column, declarative_base
 from datetime import datetime, timezone
+
 
 DeclarativeBase = declarative_base()
 
@@ -15,11 +16,9 @@ class UserOrm(Model):
     __tablename__ = 'users'
 
     user_id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
-    ### drugs список отношений, drugs теперь является списком (List["DrugOrm"]),
-    ### что указывает на то, что один пользователь может иметь много лекарств.
     drugs: Mapped[List["DrugOrm"]] = relationship("DrugOrm", back_populates="user", lazy='joined')
-    schedule: Mapped[List[List[Union[str, datetime, None]]]] = mapped_column(JSON)
-    last_day_times: Mapped[List[Optional[datetime]]] = mapped_column(JSON)
+    schedule: Mapped[List[List[Dict[str, Union[str, datetime]]]]] = mapped_column(JSON, default=[])
+    last_day_times: Mapped[List[Optional[datetime]]] = mapped_column(JSON, default=[])
 
     def model_dump(self):
         return {
@@ -27,7 +26,6 @@ class UserOrm(Model):
             "schedule": self.schedule,
             "last_day_times": self.last_day_times,
         }
-
 
 class DrugOrm(Model):
     __tablename__ = 'drugs'

@@ -1,8 +1,12 @@
 from contextlib import asynccontextmanager
-from src.models import SchemaScheduleCreate
-from fastapi import FastAPI, HTTPException
 
-from src.DB.database import get_db, create_tables, delete_tables
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.DB.ORM_models import UserOrm, ScheduleCreateORM
+from src.models import SchemaScheduleCreate
+from fastapi import FastAPI, HTTPException, Depends
+
+from src.DB.database import get_db, create_tables, delete_tables, new_session
 from src.repository.repository import TaskRepository
 from src.repository.utils import ScheduleGeneratorTimes
 
@@ -19,30 +23,27 @@ app = FastAPI(lifespan=lifespan)
 
 # Обработчик для создания расписания
 @app.post("/schedule")
-async def create_schedule(schedule: SchemaScheduleCreate):
-    try:
-        # Получаем пользователя
-        user = await TaskRepository.get_user(schedule.user_id)
+async def create_schedule(schedule_create: SchemaScheduleCreate, db: AsyncSession = Depends(get_db)):
+    # Генерация расписания для всех лекарств
+    schedule, last_day_times = ScheduleGeneratorTimes.generate_scheduled_times(schedule_create)
 
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+    # Используем TaskRepository для получения пользователя
+    user = await TaskRepository.get_user(schedule_create.user_id)  # Получаем пользователя
 
-            # Генерируем расписание и последний день приема
-        generated_schedule, last_day_times = ScheduleGeneratorTimes.generate_scheduled_times(user)
+    # Проверка, найден ли пользователь
+    if user is None:
+        return {"msg": "User not found"}, 404  # Возвращаем ошибку, если пользователь не найден
 
-        # Сохраняем в базе данных
-        new_schedule = await TaskRepository.add_task(schedule)
+    # Добавьте новое расписание и последние дни
+    user.schedule.append(schedule)
+    user.last_day_times.extend(last_day_times)  # Используйте extend, если last_day_times — это список
 
-        # Возвращаем расписание и последний день приема
-        return {
-            "user_id": user.user_id,  # Возвращаем идентификатор пользователя
-            "schedule": generated_schedule,
-            "last_day_times": last_day_times,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    # Сохраните пользователя в базе данных
+    db.add(user)
+    await db.commit()
 
-    # @app.get("/schedules")
+    return {"message": "Schedule created successfully", "schedule": schedule}
+        # @app.get("/schedules")
 # def get_user_schedules(user_id: uuid.UUID, db: Session = Depends(get_db)):
 #     schedules = get_user_schedules(user_id, db)
 #     return {"schedules": schedules}
