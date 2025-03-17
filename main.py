@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,7 +9,7 @@ from fastapi import FastAPI, HTTPException, Depends
 
 from src.DB.database import get_db, create_tables, delete_tables, new_session
 from src.repository.repository import TaskRepository
-from src.repository.utils import ScheduleGeneratorTimes
+from src.repository.utils import ScheduleGeneratorTimes, serialize_datetime
 
 
 @asynccontextmanager
@@ -21,29 +22,46 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# Обработчик для создания расписания
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
 @app.post("/schedule")
 async def create_schedule(schedule_create: SchemaScheduleCreate, db: AsyncSession = Depends(get_db)):
-    # Генерация расписания для всех лекарств
-    schedule, last_day_times = ScheduleGeneratorTimes.generate_scheduled_times(schedule_create)
+    logger.info("Received request to create schedule for user_id: %s", schedule_create.user_id)
 
-    # Используем TaskRepository для получения пользователя
-    user = await TaskRepository.get_user(schedule_create.user_id)  # Получаем пользователя
+    try:
+        # Генерация расписания для всех лекарств
+        schedule, last_day_times = ScheduleGeneratorTimes.generate_scheduled_times(schedule_create)
+        logger.info("Generated schedule: %s", schedule)
 
-    # Проверка, найден ли пользователь
-    if user is None:
-        return {"msg": "User not found"}, 404  # Возвращаем ошибку, если пользователь не найден
+        # Используем TaskRepository для получения пользователя
+        user = await TaskRepository.get_user(schedule_create.user_id)
+        logger.info("Fetched user: %s", user)
 
-    # Добавьте новое расписание и последние дни
-    user.schedule.append(schedule)
-    user.last_day_times.extend(last_day_times)  # Используйте extend, если last_day_times — это список
+        # Проверка, найден ли пользователь
+        if user is None:
+            logger.warning("User not found for user_id: %s. Creating a new user.", schedule_create.user_id)
+            user = UserOrm(user_id=schedule_create.user_id)  # создаем нового пользователя
+            user.schedule = []  # Инициализируем расписание
+            user.last_day_times = []  # Инициализируем последние дни, если это необходимо
 
-    # Сохраните пользователя в базе данных
-    db.add(user)
-    await db.commit()
+        # Сериализуем расписание и последние дни
+        user.schedule.append(serialize_datetime(schedule))
+        user.last_day_times.extend(serialize_datetime(last_day_times))
+        logger.info("Updated user schedule and last day times.")
 
-    return {"message": "Schedule created successfully", "schedule": schedule}
+        # Сохраните пользователя в базе данных
+        db.add(user)
+        await db.commit()
+        logger.info("Schedule saved successfully for user_id: %s", schedule_create.user_id)
 
+        return {"message": "Schedule created successfully", "schedule": schedule, "last_day_times": last_day_times}
+
+    except Exception as e:
+        logger.exception("An error occurred while creating schedule for user_id: %s", schedule_create.user_id)
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 # @app.get("/schedules")

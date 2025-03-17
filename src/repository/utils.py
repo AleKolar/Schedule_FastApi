@@ -83,3 +83,13 @@ class ScheduleGeneratorTimes:
                 last_day_times.append(None)
 
         return schedule, last_day_times
+
+# Конвертация всех datetime-объектов в строку
+def serialize_datetime(data):
+    if isinstance(data, list):
+        return [serialize_datetime(item) for item in data]
+    elif isinstance(data, dict):
+        return {key: serialize_datetime(value) for key, value in data.items()}
+    elif isinstance(data, datetime):
+        return data.isoformat()  # Или любой другой формат, который вам нужен
+    return data
