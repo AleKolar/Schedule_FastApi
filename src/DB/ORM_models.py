@@ -58,7 +58,7 @@ class DrugOrm(Model):
 class ScheduleCreateORM(Model):
     __tablename__ = 'schedule'
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
+    schedule_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
     first_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now(timezone.utc))
     drug: Mapped[str] = mapped_column(String, nullable=False)
     periodicity: Mapped[int] = mapped_column(Integer, nullable=False)

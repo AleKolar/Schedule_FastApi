@@ -14,8 +14,6 @@ class TaskRepository:
             user = await session.get(UserOrm, user_id)
             return user
 
-
-
     @classmethod
     async def add_task(cls, schedule: SchemaScheduleCreate):
         async with new_session() as session:

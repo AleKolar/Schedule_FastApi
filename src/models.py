@@ -6,7 +6,6 @@ from typing import List, Optional, Union
 
 from pydantic import BaseModel, Field, model_validator, ConfigDict
 
-
 from src.repository.utils import ScheduleGeneratorTimes
 
 
@@ -30,6 +29,7 @@ class User(BaseModel):
     user_id: uuid.UUID = Field(..., description="Идентификатор пациента (user_id)")
     schedule: List[List[Union[str, datetime, None]]] = []
     last_day_times: List[Optional[datetime]] = Field(..., description="Последние дни приема лекарств")
+    drugs: List[str] = Field(..., description="Список лекарств пациента")
 
     @model_validator(mode='after')
     def generate_scheduled_times(self):
@@ -45,6 +45,8 @@ class ScheduleCreate(BaseModel):
     periodicity: int = Field(..., gt=0, description="Периодичность приёмов в часах")
     duration_days: Optional[int] = Field(None, ge=1, description="Продолжительность лечения в днях (Optional)")
     user_id: uuid.UUID = Field(..., description="Идентификатор пациента (user_id)")
+    schedule_id: int = Field(..., description="Идентификатор расписания (schedule_id)")
+
 
 class SchemaScheduleCreate(ScheduleCreate):
     model_config = ConfigDict(from_attributes=True)

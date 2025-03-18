@@ -3,11 +3,12 @@ from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.DB.ORM_models import UserOrm, ScheduleCreateORM
-from src.models import SchemaScheduleCreate
+from src.DB.ORM_models import UserOrm
+
 from fastapi import FastAPI, HTTPException, Depends
 
 from src.DB.database import get_db, create_tables, delete_tables, new_session
+from src.models import SchemaScheduleCreate
 from src.repository.repository import TaskRepository
 from src.repository.utils import ScheduleGeneratorTimes, serialize_datetime
 
@@ -36,11 +37,9 @@ async def create_schedule(schedule_create: SchemaScheduleCreate, db: AsyncSessio
         schedule, last_day_times = ScheduleGeneratorTimes.generate_scheduled_times(schedule_create)
         logger.info("Generated schedule: %s", schedule)
 
-        # Используем TaskRepository для получения пользователя
         user = await TaskRepository.get_user(schedule_create.user_id)
         logger.info("Fetched user: %s", user)
 
-        # Проверка, найден ли пользователь
         if user is None:
             logger.warning("User not found for user_id: %s. Creating a new user.", schedule_create.user_id)
             user = UserOrm(user_id=schedule_create.user_id)  # создаем нового пользователя
